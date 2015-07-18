@@ -67,8 +67,8 @@ char* getupval(Function * F, int r) {
 #define SET(s,y) s->values[y]
 #define SET_IS_EMPTY(s) (s->ctr == 0)
 
-#define opstr(o) ((o)==OP_EQ?"==":(o)==OP_LE?"<=":(o)==OP_LT?"<":(((o)==OP_TEST)||((o)==OP_TESTSET))?NULL:"?") // Lua5.1 specific
-#define invopstr(o) ((o)==OP_EQ?"~=":(o)==OP_LE?">":(o)==OP_LT?">=":(((o)==OP_TEST)||((o)==OP_TESTSET))?"not":"?") // Lua5.1 specific
+#define opstr(o) ((o)==HKS_OPCODE_EQ?"==":(o)==HKS_OPCODE_LE?"<=":(o)==HKS_OPCODE_LT?"<":(((o)==HKS_OPCODE_TEST)||((o)==HKS_OPCODE_TESTSET))?NULL:"?") // Lua5.1 specific
+#define invopstr(o) ((o)==HKS_OPCODE_EQ?"~=":(o)==HKS_OPCODE_LE?">":(o)==HKS_OPCODE_LT?">=":(((o)==HKS_OPCODE_TEST)||((o)==HKS_OPCODE_TESTSET))?"not":"?") // Lua5.1 specific
 
 #define IsMain(f)	(f->linedefined==0)
 #define fb2int(x)	(((x) & 7) << ((x) >> 3))
@@ -148,7 +148,7 @@ StringBuffer* PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev)
          op = invopstr(exp->op);
       else
          op = opstr(exp->op);
-      if ((exp->op != OP_TEST) && (exp->op != OP_TESTSET)) {
+      if ((exp->op != HKS_OPCODE_TEST) && (exp->op != HKS_OPCODE_TESTSET)) {
          StringBuffer_addPrintf(str, "%s %s %s", exp->op1, op, exp->op2);
       } else {
          if (op) 
@@ -225,7 +225,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
    for (i = realLast; i >= 0; i--) {
       int dest = F->bools[i]->dest;
       if ((elseaddr > *thenaddr) &&
-         ( ((F->bools[i]->op == OP_TEST) || (F->bools[i]->op == OP_TESTSET)) ? (dest > elseaddr+1) :
+         ( ((F->bools[i]->op == HKS_OPCODE_TEST) || (F->bools[i]->op == HKS_OPCODE_TESTSET)) ? (dest > elseaddr+1) :
                                         (dest > elseaddr))) {
          last = i;
          *thenaddr = F->bools[i]->pc + 2;
@@ -296,7 +296,7 @@ printf("\n");
          TieAsNext(curr, exp);
          curr = exp;
          if (endif) {
-            if ((op->op != OP_TEST) && (op->op != OP_TESTSET)) {
+            if ((op->op != HKS_OPCODE_TEST) && (op->op != HKS_OPCODE_TESTSET)) {
                if (*endif != 0 && *endif != dest) {
                   SET_ERROR(F,"unhandled construct in 'if'");
                   //return NULL;
@@ -1096,16 +1096,16 @@ void DeclareLocals(Function * F)
          int r = F->freeLocal + locals + internalLocals;
 				 Instruction instr = F->f->code[F->pc];
 				 // handle FOR loops
-				 if (GET_OPCODE(instr) == OP_FORPREP) {
+				 if (GET_OPCODE(instr) == HKS_OPCODE_FORPREP) {
 						F->f->locvars[i].startpc = F->pc+1;
 						continue;
 				 }
 				 // handle TFOR loops
-				 if (GET_OPCODE(instr) == OP_JMP) {
+				 if (GET_OPCODE(instr) == HKS_OPCODE_JMP) {
 					 Instruction n2 = F->f->code[F->pc+1+GETARG_sBx(instr)];
 				   //fprintf(stderr,"3 %d\n",F->pc+1+GETARG_sBx(instr));	 
 					 //fprintf(stderr,"4 %s %d\n",luaP_opnames[GET_OPCODE(n2)], F->pc+GETARG_sBx(instr));
-					 if (GET_OPCODE(n2) == OP_TFORLOOP) {
+					 if (GET_OPCODE(n2) == HKS_OPCODE_TFORLOOP) {
 							F->f->locvars[i].startpc = F->pc+1;
 							continue;
 					 }
@@ -1388,20 +1388,20 @@ char* ProcessCode(const Proto * f, int indent)
    for (pc = n - 1; pc >= 0; pc--) {
       Instruction i = code[pc];
       OpCode o = GET_OPCODE(i);
-      if (o == OP_JMP) {
+      if (o == HKS_OPCODE_JMP) {
          int sbc = GETARG_sBx(i);
          int dest = sbc + pc;
          if (dest < pc) {
             if (dest+2 > 0
-            && GET_OPCODE(code[dest]) == OP_JMP
+            && GET_OPCODE(code[dest]) == HKS_OPCODE_JMP
             && !PeekSet(F->whiles, dest)) {
                AddToSet(F->whiles, dest);
-            } else if (GET_OPCODE(code[dest]) != OP_FORPREP) {
+            } else if (GET_OPCODE(code[dest]) != HKS_OPCODE_FORPREP) {
                AddToSet(F->repeats, dest+2);
                AddToSet(F->untils, pc);
             }
          }
-      } else if (o == OP_CLOSE) {
+      } else if (o == HKS_OPCODE_CLOSE) {
          int a = GETARG_A(i);
          AddToSet(F->do_opens, f->locvars[a].startpc);
          AddToSet(F->do_closes, f->locvars[a].endpc);
@@ -1419,12 +1419,12 @@ char* ProcessCode(const Proto * f, int indent)
       F->pc = pc;
 		// nil optimization of Lua 5.1
 		if (pc == 0) {
-			if ((o == OP_SETGLOBAL) || (o == OP_SETUPVAL)){
+			if ((o == HKS_OPCODE_SETGLOBAL) || (o == HKS_OPCODE_SETUPVAL)){
 				int ixx;
 				for (ixx = F->freeLocal; ixx <= a; ixx++) {
 				TRY(Assign(F, REGISTER(ixx), "nil", ixx, 0, 1));
 				}
-			} else if (o != OP_JMP) {
+			} else if (o != HKS_OPCODE_JMP) {
 				int ixx;
 				for (ixx = F->freeLocal; ixx <= a-1; ixx++) {
 				TRY(Assign(F, REGISTER(ixx), "nil", ixx, 0, 1));
@@ -1493,7 +1493,7 @@ char* ProcessCode(const Proto * f, int indent)
       StringBuffer_prune(str);
 
       switch (o) {
-      case OP_MOVE:
+      case HKS_OPCODE_MOVE:
 				/* Upvalue handling added to OP_CLOSURE */
          {
             char* bstr = NULL;
@@ -1511,7 +1511,7 @@ char* ProcessCode(const Proto * f, int indent)
             TRY(Assign(F, REGISTER(a), bstr, a, PRIORITY(b), 1));
             break;
          }
-      case OP_LOADK:
+      case HKS_OPCODE_LOADK:
          {
             /*
              * Constant. Store it in register. 
@@ -1521,7 +1521,7 @@ char* ProcessCode(const Proto * f, int indent)
             break;
             free(ctt);
          }
-      case OP_LOADBOOL:
+      case HKS_OPCODE_LOADBOOL:
          {
             if ((F->nextBool == 0) || (c==0)) {
                /*
@@ -1546,7 +1546,7 @@ char* ProcessCode(const Proto * f, int indent)
                ignoreNext = 1;
             break;
          }
-      case OP_LOADNIL:
+      case HKS_OPCODE_LOADNIL:
          {
             int i;
             /*
@@ -1557,7 +1557,7 @@ char* ProcessCode(const Proto * f, int indent)
             }
             break;
          }
-		  case OP_VARARG: // Lua5.1 specific.
+		  case HKS_OPCODE_VARARG: // Lua5.1 specific.
          {
             int i;
             /*
@@ -1572,12 +1572,12 @@ char* ProcessCode(const Proto * f, int indent)
 						}
             break;
          }
-      case OP_GETUPVAL:
+      case HKS_OPCODE_GETUPVAL:
          {
             TRY(Assign(F, REGISTER(a), UPVALUE(b), a, 0, 1));
             break;
          }
-      case OP_GETGLOBAL:
+      case HKS_OPCODE_GETGLOBAL:
          {
             /*
              * Read global into register. 
@@ -1585,7 +1585,7 @@ char* ProcessCode(const Proto * f, int indent)
             TRY(Assign(F, REGISTER(a), GLOBAL(bc), a, 0, 1));
             break;
          }
-      case OP_GETTABLE:
+      case HKS_OPCODE_GETTABLE:
          {
             /*
              * Read table entry into register. 
@@ -1603,7 +1603,7 @@ char* ProcessCode(const Proto * f, int indent)
             free(cstr);
             break;
          }
-      case OP_SETGLOBAL:
+      case HKS_OPCODE_SETGLOBAL:
          {
             /*
              * Global Assignment statement. 
@@ -1619,7 +1619,7 @@ char* ProcessCode(const Proto * f, int indent)
             }
             break;
          }
-      case OP_SETUPVAL:
+      case HKS_OPCODE_SETUPVAL:
          {
             /*
              * Global Assignment statement. 
@@ -1635,7 +1635,7 @@ char* ProcessCode(const Proto * f, int indent)
             }
             break;
          }
-      case OP_SETTABLE:
+      case HKS_OPCODE_SETTABLE:
          {
             char *bstr, *cstr;
             int settable;
@@ -1657,14 +1657,14 @@ char* ProcessCode(const Proto * f, int indent)
             free(cstr);
             break;
          }
-      case OP_NEWTABLE:
+      case HKS_OPCODE_NEWTABLE:
          {
 			 Instruction i2 = code[pc+1];
 			 OpCode o2 = GET_OPCODE(i2);
 			 Instruction i3 = code[pc+2];
 			 OpCode o3 = GET_OPCODE(i3);
 			 // if the next value is VARARG followed by a SETLIST this is probably a "{...}" construct
-			 if (o2==OP_VARARG && o3==OP_SETLIST) {
+			 if (o2== HKS_OPCODE_VARARG && o3== HKS_OPCODE_SETLIST) {
 				 TRY(Assign(F, REGISTER(a), "{...}", a, 0, 1));
 				 ignoreNext = 2;
 			 } else {
@@ -1672,7 +1672,7 @@ char* ProcessCode(const Proto * f, int indent)
 			 }
             break;
          }
-      case OP_SELF:
+      case HKS_OPCODE_SELF:
          {
             /*
              * Read table entry into register. 
@@ -1692,12 +1692,12 @@ char* ProcessCode(const Proto * f, int indent)
             free(cstr);
             break;
          }
-      case OP_ADD:
-      case OP_SUB:
-      case OP_MUL:
-      case OP_DIV:
-      case OP_POW:
-			case OP_MOD:
+      case HKS_OPCODE_ADD:
+      case HKS_OPCODE_SUB:
+      case HKS_OPCODE_MUL:
+      case HKS_OPCODE_DIV:
+      case HKS_OPCODE_POW:
+			case HKS_OPCODE_MOD:
          {
             char *bstr, *cstr;
             char *oper = operators[o];
@@ -1724,9 +1724,9 @@ char* ProcessCode(const Proto * f, int indent)
             free(cstr);
             break;
          }
-      case OP_UNM:
-      case OP_NOT:
-			case OP_LEN:
+      case HKS_OPCODE_UNM:
+      case HKS_OPCODE_NOT:
+			case HKS_OPCODE_LEN:
          {
             char *bstr;
             int prio = priorities[o];
@@ -1741,7 +1741,7 @@ char* ProcessCode(const Proto * f, int indent)
             TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
             break;
          }
-      case OP_CONCAT:
+      case HKS_OPCODE_CONCAT:
          {
             int i;
             for (i = b; i <= c; i++) {
@@ -1758,7 +1758,7 @@ char* ProcessCode(const Proto * f, int indent)
             TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
             break;
          }
-      case OP_JMP:
+      case HKS_OPCODE_JMP:
          {
             int dest = sbc + pc + 2;
             Instruction idest = code[dest - 1];
@@ -1781,7 +1781,7 @@ char* ProcessCode(const Proto * f, int indent)
                   RawAddStatement(F, str);
                   free(test);
                }
-						} else if (GET_OPCODE(idest) == OP_TFORLOOP) {
+						} else if (GET_OPCODE(idest) == HKS_OPCODE_TFORLOOP) {
 							 /*
 							 * generic 'for' 
 							 */
@@ -1810,10 +1810,10 @@ char* ProcessCode(const Proto * f, int indent)
 											if (f->locvars[i2].startpc == pc + 1) {
 												loopvars++;
 												//search for the loop variable. Set it's endpc one step further so it will be the same for all loop variables
-												if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-2]) == OP_TFORLOOP) {
+												if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-2]) == HKS_OPCODE_TFORLOOP) {
 													f->locvars[i2].endpc -= 2;
 												}
-												if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-1]) == OP_TFORLOOP) {
+												if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-1]) == HKS_OPCODE_TFORLOOP) {
 													f->locvars[i2].endpc -= 1;
 												}
 												if (loopvars==3+i) {											
@@ -1870,7 +1870,7 @@ char* ProcessCode(const Proto * f, int indent)
                StringBuffer_printf(str, "end");
                TRY(AddStatement(F, str));
                /* end while 1 */
-            } else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
+            } else if (sbc == 2 && GET_OPCODE(code[pc+2]) == HKS_OPCODE_LOADBOOL) {
                int boola = GETARG_A(code[pc+1]);
                char* test;
                /* skip */
@@ -1878,7 +1878,7 @@ char* ProcessCode(const Proto * f, int indent)
                char* rb = strdup(ra);
                F->bools[F->nextBool]->op1 = ra;
                F->bools[F->nextBool]->op2 = rb;
-               F->bools[F->nextBool]->op = OP_TESTSET;
+               F->bools[F->nextBool]->op = HKS_OPCODE_TESTSET;
                F->bools[F->nextBool]->neg = c;
                F->bools[F->nextBool]->pc = pc + 3;
                F->testpending = a+1;
@@ -1891,7 +1891,7 @@ char* ProcessCode(const Proto * f, int indent)
                TRY(UnsetPending(F, boola));
                TRY(Assign(F, REGISTER(boola), StringBuffer_getRef(str), boola, 0, 0));
                ignoreNext = 2;
-            } else if (GET_OPCODE(idest) == OP_LOADBOOL) {
+            } else if (GET_OPCODE(idest) == HKS_OPCODE_LOADBOOL) {
                /*
                 * constant boolean value
                 */
@@ -1904,7 +1904,7 @@ char* ProcessCode(const Proto * f, int indent)
                int nextsbc = sbc-1;
                for (;;) {
                   Instruction nextins = code[nextpc];
-                  if (GET_OPCODE(nextins) == OP_JMP && GETARG_sBx(nextins) == nextsbc) {
+                  if (GET_OPCODE(nextins) == HKS_OPCODE_JMP && GETARG_sBx(nextins) == nextsbc) {
                      nextpc++;
                      nextsbc--;
                   } else
@@ -1927,17 +1927,17 @@ char* ProcessCode(const Proto * f, int indent)
 
             break;
          }
-      case OP_EQ:
-      case OP_LT:
-      case OP_LE:
+      case HKS_OPCODE_EQ:
+      case HKS_OPCODE_LT:
+      case HKS_OPCODE_LE:
          {
             if (IS_CONSTANT(b)) {
                int swap = b;
                b = c;
                c = swap;
                a = !a;
-               if (o == OP_LT) o = OP_LE;
-               else if (o == OP_LE) o = OP_LT;
+               if (o == HKS_OPCODE_LT) o = HKS_OPCODE_LE;
+               else if (o == HKS_OPCODE_LE) o = HKS_OPCODE_LT;
             }
             TRY(F->bools[F->nextBool]->op1 = RegisterOrConstant(F, b));
             TRY(F->bools[F->nextBool]->op2 = RegisterOrConstant(F, c));
@@ -1947,13 +1947,13 @@ char* ProcessCode(const Proto * f, int indent)
             boolpending = 1;
             break;
          }
-			case OP_TESTSET: // Lua5.1 specific TODO: correct it
-      case OP_TEST:
+			case HKS_OPCODE_TESTSET: // Lua5.1 specific TODO: correct it
+      case HKS_OPCODE_TEST:
          {
 					 int cmpa, cmpb, cmpc;
 					 char *ra, *rb, *rc;
 
-					 if (o==OP_TESTSET) {
+					 if (o== HKS_OPCODE_TESTSET) {
 						 cmpa = a;
 						 cmpb = b;
 						 cmpc = c;
@@ -1990,8 +1990,8 @@ char* ProcessCode(const Proto * f, int indent)
             boolpending = 1;
             break;
          }
-      case OP_CALL:
-      case OP_TAILCALL:
+      case HKS_OPCODE_CALL:
+      case HKS_OPCODE_TAILCALL:
          {
             /*
              * Function call. The CALL opcode works like this:
@@ -2007,7 +2007,7 @@ char* ProcessCode(const Proto * f, int indent)
 							 while (PENDING(limit) || IS_VARIABLE(limit)) limit++;
 						} else
                limit = a + b;
-            if (o == OP_TAILCALL) {
+            if (o == HKS_OPCODE_TAILCALL) {
                StringBuffer_set(str, "return ");
                ignoreNext = 1;
             }
@@ -2038,13 +2038,13 @@ char* ProcessCode(const Proto * f, int indent)
             if (c == 0) {
                F->lastCall = a;
             }
-            if (GET_OPCODE(code[pc+1]) == OP_LOADNIL && GETARG_A(code[pc+1]) == a+1) {
+            if (GET_OPCODE(code[pc+1]) == HKS_OPCODE_LOADNIL && GETARG_A(code[pc+1]) == a+1) {
                StringBuffer_prepend(str, "(");
                StringBuffer_add(str, ")");
                c += GETARG_B(code[pc+1]) - GETARG_A(code[pc+1]) + 1;
                // ignoreNext = 1;
             }
-            if (o == OP_TAILCALL || c == 1 ) {
+            if (o == HKS_OPCODE_TAILCALL || c == 1 ) {
                TRY(AddStatement(F, str));
             } else {
                TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
@@ -2054,7 +2054,7 @@ char* ProcessCode(const Proto * f, int indent)
             }
             break;
          }
-      case OP_RETURN:
+      case HKS_OPCODE_RETURN:
          {
             /*
              * Return call. The RETURN opcode works like this: return
@@ -2082,7 +2082,7 @@ char* ProcessCode(const Proto * f, int indent)
             TRY(AddStatement(F, str));
             break;
          }
-      case OP_FORLOOP: //Lua5.1 specific. TODO: CHECK
+      case HKS_OPCODE_FORLOOP: //Lua5.1 specific. TODO: CHECK
          {
 					  int i;
 
@@ -2100,7 +2100,7 @@ char* ProcessCode(const Proto * f, int indent)
             TRY(AddStatement(F, str));
             break;
          }
-      case OP_TFORLOOP: //Lua5.1 specific. TODO: CHECK
+      case HKS_OPCODE_TFORLOOP: //Lua5.1 specific. TODO: CHECK
          {
 					 int i;
 					 for (i=F->intbegin[F->intspos]; i<=F->intend[F->intspos]; i++)
@@ -2117,7 +2117,7 @@ char* ProcessCode(const Proto * f, int indent)
             ignoreNext = 1;
             break;
          }
-       case OP_FORPREP: //Lua5.1 specific. TODO: CHECK
+       case HKS_OPCODE_FORPREP: //Lua5.1 specific. TODO: CHECK
          {
            /*
            * numeric 'for' 
@@ -2142,7 +2142,7 @@ char* ProcessCode(const Proto * f, int indent)
                   if (f->locvars[i].startpc == pc + 1) {
 										loopvars++;
 										//search for the loop variable. Set it's endpc one step further so it will be the same for all loop variables
-										if (GET_OPCODE(F->f->code[f->locvars[i].endpc-1]) == OP_FORLOOP) {
+										if (GET_OPCODE(F->f->code[f->locvars[i].endpc-1]) == HKS_OPCODE_FORLOOP) {
 											f->locvars[i].endpc -=1;
 										}
 										if (loopvars==4) {											
@@ -2199,17 +2199,17 @@ char* ProcessCode(const Proto * f, int indent)
            F->indent++;
             break;
          }
-      case OP_SETLIST:
+      case HKS_OPCODE_SETLIST:
          {
             TRY(SetList(F, a, b, c));
             break;
          }
-      case OP_CLOSE:
+      case HKS_OPCODE_CLOSE:
          /*
           * Handled in do_opens/do_closes variables.
           */
          break;
-      case OP_CLOSURE:
+      case HKS_OPCODE_CLOSURE:
          {
             /*
              * Function. 
@@ -2229,11 +2229,11 @@ char* ProcessCode(const Proto * f, int indent)
 						f->p[c]->upvalues = malloc(uvn * sizeof(TString*));
 
 						for (i=0; i<uvn; i++) {
-							if (GET_OPCODE(code[pc+i+1]) == OP_MOVE) {
+							if (GET_OPCODE(code[pc+i+1]) == HKS_OPCODE_MOVE) {
 								char names[10];
 								sprintf(names,"l_%d_%d",functionnum,GETARG_B(code[pc+i+1]));
 								f->p[c]->upvalues[i] = luaS_new(glstate, names);
-							} else if (GET_OPCODE(code[pc+i+1]) == OP_GETUPVAL) {
+							} else if (GET_OPCODE(code[pc+i+1]) == HKS_OPCODE_GETUPVAL) {
 								f->p[c]->upvalues[i] = f->upvalues[GETARG_B(code[pc+i+1])];
 							} else {
 								char names[20];
@@ -2416,15 +2416,15 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			sprintf(line,"");
 			sprintf(lend,"");
 			switch (o) {
-      case OP_MOVE:
+      case HKS_OPCODE_MOVE:
 				 sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
 				 sprintf(lend,"%c%d := %c%d",CC(a),CV(a),CC(b),CV(b));
 				 break;
-      case OP_LOADK:
+      case HKS_OPCODE_LOADK:
 				 sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
 				 sprintf(lend,"%c%d := %s",CC(a),CV(a),DecompileConstant(f,bc));
          break;
-      case OP_LOADBOOL:
+      case HKS_OPCODE_LOADBOOL:
 				 sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
 				 if (b) {
 					 if (c) {
@@ -2440,7 +2440,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					 }
 				 }
          break;
-      case OP_LOADNIL:
+      case HKS_OPCODE_LOADNIL:
 				 sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
 				 sprintf(lend,"");
 				 for (l=a; l<=b; l++) {
@@ -2449,7 +2449,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 }
 				 strcat(lend,"nil");
          break;
-		  case OP_VARARG:
+		  case HKS_OPCODE_VARARG:
 			     if (b==0) {
 					 sprintf(line,"%c%d 0",CC(a),CV(a));
 				 } else {
@@ -2467,15 +2467,15 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 }
 				 strcat(lend,"...");
          break;
-      case OP_GETUPVAL:
+      case HKS_OPCODE_GETUPVAL:
 				 sprintf(line,"%c%d U%d",CC(a),CV(a),b);
 				 sprintf(lend,"%c%d := U%d",CC(a),CV(a),b);
          break;
-      case OP_GETGLOBAL:
+      case HKS_OPCODE_GETGLOBAL:
 				 sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
 				 sprintf(lend,"%c%d := %s",CC(a),CV(a),GLOBAL(bc));
          break;
-      case OP_GETTABLE:
+      case HKS_OPCODE_GETTABLE:
 				 sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 				 if (IS_CONSTANT(c)) {
 					 sprintf(lend,"R%d := R%d[%s]",a,b,DecompileConstant(f,c-256));
@@ -2483,15 +2483,15 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					 sprintf(lend,"R%d := R%d[R%d]",a,b,c);
 				 }
          break;
-      case OP_SETGLOBAL:
+      case HKS_OPCODE_SETGLOBAL:
 				 sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
 				 sprintf(lend,"%s := %c%d",GLOBAL(bc), CC(a),CV(a));
          break;
-      case OP_SETUPVAL:
+      case HKS_OPCODE_SETUPVAL:
 				 sprintf(line,"%c%d U%d",CC(a),CV(a),b);
 				 sprintf(lend,"U%d := %cd",b, CC(a),CV(a));
          break;
-      case OP_SETTABLE:
+      case HKS_OPCODE_SETTABLE:
          sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 				 if (IS_CONSTANT(b)) {
 					 if (IS_CONSTANT(c)) {
@@ -2507,11 +2507,11 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					 }
 				 }
          break;
-      case OP_NEWTABLE:
+      case HKS_OPCODE_NEWTABLE:
 				 sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
 				 sprintf(lend,"%c%d := {}",CC(a),CV(a));
          break;
-      case OP_SELF:
+      case HKS_OPCODE_SELF:
 				 sprintf(line,"R%d R%d %c%d",a,b,CC(c),CV(c));
 				 if (IS_CONSTANT(c)) {
 					 sprintf(lend,"R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,DecompileConstant(f,c-256));
@@ -2519,12 +2519,12 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					 sprintf(lend,"R%d := R%d; R%d := R%d[R%d]",a+1,b,a,b,c);
 				 }
          break;
-      case OP_ADD:
-      case OP_SUB:
-      case OP_MUL:
-      case OP_DIV:
-      case OP_POW:
-			case OP_MOD:
+      case HKS_OPCODE_ADD:
+      case HKS_OPCODE_SUB:
+      case HKS_OPCODE_MUL:
+      case HKS_OPCODE_DIV:
+      case HKS_OPCODE_POW:
+			case HKS_OPCODE_MOD:
 				 sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 				 if (IS_CONSTANT(b)) {
 					 if (IS_CONSTANT(c)) {
@@ -2540,9 +2540,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					 }
 				 }
          break;
-      case OP_UNM:
-      case OP_NOT:
-			case OP_LEN:
+      case HKS_OPCODE_UNM:
+      case HKS_OPCODE_NOT:
+			case HKS_OPCODE_LEN:
 				 sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
 				 if (IS_CONSTANT(b)) {
   				 sprintf(lend,"R%d := %s %s",a,operators[o],DecompileConstant(f,b-256));				 
@@ -2550,7 +2550,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
   				 sprintf(lend,"R%d := %s R%d",a,operators[o],b);
 				 }
          break;
-      case OP_CONCAT:
+      case HKS_OPCODE_CONCAT:
 				 sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 				 sprintf(lend,"R%d := ",a);
 				 for (l=b; l<c; l++) {
@@ -2560,16 +2560,16 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 sprintf(tmp,"R%d",c);
 				 strcat(lend,tmp);
          break;
-      case OP_JMP:
+      case HKS_OPCODE_JMP:
          {
             int dest = sbc + pc + 2;
 						sprintf(line, "%d",dest);
 						sprintf(lend, "PC := %d",dest);
 				 }
          break;
-      case OP_EQ:
-      case OP_LT:
-      case OP_LE:
+      case HKS_OPCODE_EQ:
+      case HKS_OPCODE_LT:
+      case HKS_OPCODE_LE:
 				{
 					int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
 				 sprintf(line,"%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
@@ -2588,7 +2588,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 }
 				}
 				 break;
-      case OP_TEST:
+      case HKS_OPCODE_TEST:
 				 {
 				int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
 				 sprintf(line,"%c%d %d",CC(a),CV(a),c);
@@ -2603,7 +2603,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 }
 				}
 				 break;
-			case OP_TESTSET: 
+			case HKS_OPCODE_TESTSET:
 				{
 					int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
 				 sprintf(line,"%c%d %c%d %d",CC(a),CV(a),CC(b),CV(b),c);
@@ -2622,8 +2622,8 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 }
 				}
 				 break;
-      case OP_CALL:
-      case OP_TAILCALL:
+      case HKS_OPCODE_CALL:
+      case HKS_OPCODE_TAILCALL:
 				{
 					sprintf(line,"R%d %d %d",a,b,c);
 					if (b>=2) {
@@ -2656,7 +2656,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					sprintf(lend,"%sR%d(%s)",tmp2,a,tmp);
 				}
          break;
-      case OP_RETURN:
+      case HKS_OPCODE_RETURN:
 				{
 					sprintf(line,"R%d %d",a,b);
 					if (b>=2) {
@@ -2675,13 +2675,13 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 					sprintf(lend,"return %s",tmp);
 				}
          break;
-      case OP_FORLOOP:
+      case HKS_OPCODE_FORLOOP:
 				{
 					sprintf(line,"R%d %d",a,pc+sbc+2);
 					sprintf(lend,"R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+2,a+3,a);
 				}
          break;
-			case OP_TFORLOOP: {
+			case HKS_OPCODE_TFORLOOP: {
 				  int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
 				  sprintf(line,"R%d %d",a,c);
 					if (c>=1) {
@@ -2698,20 +2698,20 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		     sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then begin PC = %d; R%d := R%d end",tmp2, a,a+1,a+2, a+3, dest, a+2, a+3);
 				}
          break;
-			case OP_FORPREP: {
+			case HKS_OPCODE_FORPREP: {
 				  sprintf(line,"R%d %d",a,pc+sbc+2);
 					sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+2);
         }
          break;
-      case OP_SETLIST:
+      case HKS_OPCODE_SETLIST:
 				sprintf(line,"R%d %d %d",a,b,c);
 				sprintf(lend,"R%d[(%d-1)*FPF+i] := R(%d+i), 1 <= i <= %d",a,c,a,b);
          break;         
-      case OP_CLOSE:
+      case HKS_OPCODE_CLOSE:
 				sprintf(line,"R%d",a);
 				sprintf(lend,"SAVE R%d,...",a);
          break;
-      case OP_CLOSURE:
+      case HKS_OPCODE_CLOSURE:
 				sprintf(line,"R%d %d",a,bc);
 				if (strlen(name)==0) {
 					sprintf(lend,"R%d := closure(Function #%d)",a,bc+1);

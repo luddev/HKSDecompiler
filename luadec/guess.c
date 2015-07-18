@@ -92,7 +92,7 @@ int luaU_guess_locals(Proto * f, int main) {
 	  Instruction i = f->code[0];
     OpCode o = GET_OPCODE(i);
     int a = GETARG_A(i);
-	  if ((o == OP_SETGLOBAL) || (o == OP_SETUPVAL)) {
+	  if ((o == HKS_OPCODE_SETGLOBAL) || (o == HKS_OPCODE_SETUPVAL)) {
 		int ixx;
 		for (ixx = lastfree; ixx <= a; ixx++) {
       if (ixx!=a) {
@@ -104,7 +104,7 @@ int luaU_guess_locals(Proto * f, int main) {
 		  regblock[lastfree] = blockend[block];
 		  lastfree++;
 		}
-	  } else if (o != OP_JMP) {
+	  } else if (o != HKS_OPCODE_JMP) {
 	    int ixx;
 		  for (ixx = lastfree; ixx <= a-1; ixx++) {
 	  	  list_next = add(list_next,0,blockend[block]);
@@ -136,15 +136,15 @@ int luaU_guess_locals(Proto * f, int main) {
     int loadregto = -1;
     int intlocfrom = -1;
     int intlocto = -1;
-    if ((o==OP_JMP) || (o==OP_FORPREP)) {
+    if ((o== HKS_OPCODE_JMP) || (o== HKS_OPCODE_FORPREP)) {
       dest = pc + sbc + 2;
-    } else if ((pc+1!=f->sizecode) && (GET_OPCODE(f->code[pc+1])==OP_JMP)) {
+    } else if ((pc+1!=f->sizecode) && (GET_OPCODE(f->code[pc+1])== HKS_OPCODE_JMP)) {
       dest = pc+1+GETARG_sBx(f->code[pc+1])+2;
     }
 
     // check which registers were read or written to.
     switch (o) {
-      case OP_MOVE:
+      case HKS_OPCODE_MOVE:
         setreg = a;
         if (b<=a) {
           intlocfrom = b;
@@ -152,36 +152,36 @@ int luaU_guess_locals(Proto * f, int main) {
         }
         loadreg = b;
         break;
-      case OP_UNM:
-      case OP_NOT:
-			case OP_LEN:
+      case HKS_OPCODE_UNM:
+      case HKS_OPCODE_NOT:
+			case HKS_OPCODE_LEN:
         setreg = a;
         loadreg = b;
         break;
-      case OP_LOADNIL:
+      case HKS_OPCODE_LOADNIL:
         setreg = a;
         setregto = b;
         break;
-      case OP_LOADK:
-      case OP_GETUPVAL:
-      case OP_GETGLOBAL:
-      case OP_LOADBOOL:
-      case OP_NEWTABLE:
-      case OP_CLOSURE:
+      case HKS_OPCODE_LOADK:
+      case HKS_OPCODE_GETUPVAL:
+      case HKS_OPCODE_GETGLOBAL:
+      case HKS_OPCODE_LOADBOOL:
+      case HKS_OPCODE_NEWTABLE:
+      case HKS_OPCODE_CLOSURE:
         setreg = a;
         break;
-      case OP_GETTABLE:
+      case HKS_OPCODE_GETTABLE:
         setreg = a;
         loadreg = b;
         if (!IS_CONSTANT(c)) {
           loadreg2 = c;
         }
         break;
-      case OP_SETGLOBAL:
-      case OP_SETUPVAL:
+      case HKS_OPCODE_SETGLOBAL:
+      case HKS_OPCODE_SETUPVAL:
         loadreg = a;
         break;
-      case OP_SETTABLE:
+      case HKS_OPCODE_SETTABLE:
         loadreg = a;
         if (!IS_CONSTANT(b)) {
           loadreg2 = b;
@@ -201,12 +201,12 @@ int luaU_guess_locals(Proto * f, int main) {
           intlocto = a-1;
         }
         break;
-      case OP_ADD:
-      case OP_SUB:
-      case OP_MUL:
-      case OP_DIV:
-      case OP_POW:
-			case OP_MOD:
+      case HKS_OPCODE_ADD:
+      case HKS_OPCODE_SUB:
+      case HKS_OPCODE_MUL:
+      case HKS_OPCODE_DIV:
+      case HKS_OPCODE_POW:
+			case HKS_OPCODE_MOD:
         setreg = a;
         if (!IS_CONSTANT(b)) {
           loadreg = b;
@@ -219,12 +219,12 @@ int luaU_guess_locals(Proto * f, int main) {
           }
         }
         break;
-      case OP_CONCAT:
+      case HKS_OPCODE_CONCAT:
         setreg = a;
         loadreg = b;
         loadregto = c;
         break;
-      case OP_CALL:
+      case HKS_OPCODE_CALL:
         if (c==0) {
           setreg = a;
           setregto = f->maxstacksize;
@@ -243,7 +243,7 @@ int luaU_guess_locals(Proto * f, int main) {
           loadregto = a+b-1;
         }
         break;
-      case OP_RETURN:
+      case HKS_OPCODE_RETURN:
         if (b==0) {
           loadreg = a;
           loadregto = f->maxstacksize;
@@ -252,7 +252,7 @@ int luaU_guess_locals(Proto * f, int main) {
           loadregto = a+b-2;
         }
         break;
-      case OP_TAILCALL:
+      case HKS_OPCODE_TAILCALL:
         if (b==0) {
           loadreg = a;
           loadregto = f->maxstacksize;
@@ -261,7 +261,7 @@ int luaU_guess_locals(Proto * f, int main) {
           loadregto = a+b-1;
         }
         break;
-      case OP_VARARG:
+      case HKS_OPCODE_VARARG:
         if (b==0) {
           setreg = a;
           setregto = f->maxstacksize;
@@ -270,7 +270,7 @@ int luaU_guess_locals(Proto * f, int main) {
           setregto = a+b-1;
         }
         break;
-      case OP_SELF:
+      case HKS_OPCODE_SELF:
         setreg = a;
         setregto = a+1;
         loadreg = b;
@@ -282,9 +282,9 @@ int luaU_guess_locals(Proto * f, int main) {
           loadreg2 = c;
         }
         break;
-      case OP_EQ:
-      case OP_LT:
-      case OP_LE:
+      case HKS_OPCODE_EQ:
+      case HKS_OPCODE_LT:
+      case HKS_OPCODE_LE:
         if (!IS_CONSTANT(b)) {
           loadreg = b;
         }
@@ -296,14 +296,14 @@ int luaU_guess_locals(Proto * f, int main) {
           }
         }
         break;
-      case OP_TEST:
+      case HKS_OPCODE_TEST:
         loadreg = a;
         break;
-			case OP_TESTSET: 
+			case HKS_OPCODE_TESTSET:
         setreg = a;
         loadreg = b;
         break;
-      case OP_SETLIST:
+      case HKS_OPCODE_SETLIST:
         loadreg = a;
         if (b==0) {
           loadregto = f->maxstacksize;
@@ -311,11 +311,11 @@ int luaU_guess_locals(Proto * f, int main) {
           loadregto = a+b;
         }
         break;
-      case OP_FORLOOP:
+      case HKS_OPCODE_FORLOOP:
         break;
-			case OP_TFORLOOP:
+			case HKS_OPCODE_TFORLOOP:
         break;
-			case OP_FORPREP:
+			case HKS_OPCODE_FORPREP:
         loadreg = a;
         loadregto = a+2;
         setreg = a;
@@ -332,12 +332,12 @@ int luaU_guess_locals(Proto * f, int main) {
         regblock[a+3] = dest-1;
         block++;
         blockend[block] = dest-1;
-        if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
+        if (GET_OPCODE(f->code[dest-2])== HKS_OPCODE_JMP) {
           blockend[block]--;
         }
         break;
-      case OP_JMP:
-        if (GET_OPCODE(f->code[dest-1]) == OP_TFORLOOP) {
+      case HKS_OPCODE_JMP:
+        if (GET_OPCODE(f->code[dest-1]) == HKS_OPCODE_TFORLOOP) {
           int a = GETARG_A(f->code[dest-1]);
           int c = GETARG_C(f->code[dest-1]);
           setreg = a;
@@ -361,11 +361,11 @@ int luaU_guess_locals(Proto * f, int main) {
           block++;
           blockend[block] = dest-1;
         }
-        if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
+        if (GET_OPCODE(f->code[dest-2])== HKS_OPCODE_JMP) {
           blockend[block]--;
         }
         break;
-      case OP_CLOSE:
+      case HKS_OPCODE_CLOSE:
       default:
          break;
     }
